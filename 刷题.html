@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>党史练习</title>
+    <style>
+        :root {
+            --primary-color: #e63946;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-main: #2b2d42;
+            --text-sub: #8d99ae;
+            --success: #2a9d8f;
+            --error: #d90429;
+            --border-radius: 12px;
+            --shadow: 0 8px 30px rgba(0,0,0,0.05);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        #app { width: 100%; max-width: 600px; padding: 20px; }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: var(--border-radius);
+            padding: 30px;
+            box-shadow: var(--shadow);
+            text-align: center;
+        }
+
+        h1 { font-size: 1.5rem; margin-bottom: 10px; color: var(--primary-color); }
+        .subtitle { color: var(--text-sub); margin-bottom: 30px; font-size: 0.9rem; }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        .btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex: 1;
+        }
+        .btn-secondary { background: #6c757d; }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { background: #ccc; cursor: not-allowed; opacity: 0.6; }
+
+        .quiz-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+        }
+
+        .progress-bar {
+            height: 6px;
+            background: #eee;
+            border-radius: 3px;
+            margin-bottom: 25px;
+            overflow: hidden;
+        }
+        #progress-inner {
+            height: 100%;
+            background: var(--primary-color);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .q-type {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin-bottom: 10px;
+            background: #fff0f0;
+            color: var(--primary-color);
+            border: 1px solid var(--primary-color);
+        }
+
+        .q-text { font-size: 1.1rem; line-height: 1.6; margin-bottom: 25px; text-align: left; }
+
+        .options { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+        .option {
+            padding: 15px;
+            border: 1.5px solid #eee;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+        }
+        .option:hover:not(.locked) { background: #fffafa; border-color: var(--primary-color); }
+        .option.selected { background: #fff0f0; border-color: var(--primary-color); font-weight: bold; }
+        .option.correct { background: #e9f7f5 !important; border-color: var(--success) !important; color: var(--success); }
+        .option.wrong { background: #fff0f0 !important; border-color: var(--error) !important; color: var(--error); }
+        .option.locked { cursor: default; }
+
+        .feedback {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            display: none;
+            text-align: left;
+            font-size: 0.95rem;
+        }
+        .feedback.show { display: block; }
+        .feedback.is-correct { background: #e9f7f5; color: var(--success); border-left: 5px solid var(--success); }
+        .feedback.is-wrong { background: #fff0f0; color: var(--error); border-left: 5px solid var(--error); }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div id="app">
+    <div id="start-screen" class="card">
+        <h1>党史知识在线练习</h1>
+        <p class="subtitle">100道精选题 · 题目选项双随机<br>支持返回查看 · 实时解析</p>
+        <button class="btn" onclick="startQuiz()">开始刷题</button>
+    </div>
+
+    <div id="quiz-screen" class="card hidden">
+        <div class="quiz-header">
+            <span id="q-number">题目 1 / 100</span>
+            <span id="current-score">得分: 0</span>
+        </div>
+        <div class="progress-bar"><div id="progress-inner"></div></div>
+        
+        <div id="question-container">
+            <div id="q-tag" class="q-type">单选题</div>
+            <div id="q-title" class="q-text">加载中...</div>
+            <div id="q-options" class="options"></div>
+        </div>
+
+        <div id="feedback-box" class="feedback"></div>
+
+        <div class="btn-group">
+            <button id="prev-btn" class="btn btn-secondary" onclick="prevQuestion()">上一题</button>
+            <button id="submit-btn" class="btn" onclick="handleButtonClick()">提交答案</button>
+        </div>
+    </div>
+
+    <div id="result-screen" class="card hidden">
+        <h1>练习完成</h1>
+        <div id="final-score" style="font-size: 3rem; font-weight: bold; color: var(--primary-color); margin: 20px 0;">0</div>
+        <p id="score-text" style="color: var(--text-sub); margin-bottom: 30px;"></p>
+        <button class="btn" onclick="location.reload()">再测一次</button>
+    </div>
+</div>
+
+<script>
+    // 题库数据 (部分截取，结构同原代码)
+    const rawData = [
+        // --- 上册 (练习题 上) ---
+        {id: "U1", type: "多选", q: "中国产生了共产党，这是开天辟地的大事变，深刻改变了（ ）。", opts: ["近代以后中华民族发展的方向和进程", "国际共产主义运动的发展前景", "中国人民和中华民族的前途和命运", "中华民族伟大复兴的历史进程", "世界发展的趋势和格局"], ans: "ACE"},
+        {id: "U2", type: "单选", q: "1926年初，（ ）在莫斯科向中共旅俄支部作了题为《中国共产党史的发展》的长篇演讲，系统回顾了党成立以来的活动。", opts: ["瞿秋白", "王明", "张国焘", "蔡和森"], ans: "D"},
+        {id: "U3", type: "单选", q: "1942年3月30日，毛泽东在中央学习组作了（ ）的报告，由此掀起了全党学习党史的高潮。", opts: ["《新民主主义论》", "《如何研究中共党史》", "《改造我们的学习》", "《整顿党的作风》"], ans: "B"},
+        {id: "U4", type: "单选", q: "以（ ）为源头的中国共产党人精神谱系，是我们党不断从胜利走向胜利的基因密码。", opts: ["《共产党宣言》", "红船精神", "伟大建党精神", "科学社会主义"], ans: "C"},
+        {id: "U5", type: "多选", q: "习近平指出：“我们党的一百年，是（ ）。”", opts: ["矢志践行初心使命的一百年", "筚路蓝缕奠基立业的一百年", "自力更生发愤图强的一百年", "自信自强守正创新的一百年", "创造辉煌开辟未来的一百年"], ans: "ABE"},
+        {id: "U6", type: "多选", q: "中国共产党的先驱们创建了中国共产党，形成了（ ）的伟大建党精神。", opts: ["坚持真理、坚守理想", "践行初心、担当使命", "不怕牺牲、英勇斗争", "艰苦奋斗、自力更生", "对党忠诚、不负人民"], ans: "ABCE"},
+        {id: "U7", type: "单选", q: "新民主主义革命时期，中国共产党坚持把马克思主义基本原理同中国革命具体实际相结合，团结带领中国人民找到了一条（ ）的正确革命道路。", opts: ["建立苏维埃政权", "城市中心主义", "农村包围城市、武装夺取政权", "工农武装割据"], ans: "C"},
+        {id: "U8", type: "单选", q: "中华民族有史以来最为广泛而深刻的社会变革是（ ）。", opts: ["进行新民主主义革命，建立中华人民共和国", "进行社会主义革命，确立社会主义基本制度", "进行改革开放，建设有中国特色的社会主义", "进行脱贫攻坚，全面建成小康社会"], ans: "B"},
+        {id: "U9", type: "单选", q: "党的十九届六中全会制定的《中共中央关于党的百年奋斗重大成就和历史经验的决议》，对党的百年奋斗历史经验进行了全面总结，概括提炼了（ ）。", opts: ["三个务必", "六个始终", "八个明确", "十个坚持"], ans: "D"},
+        {id: "U10", type: "多选", q: "新民主主义革命时期，党面临的主要任务是，反对（ ），争取民族独立、人民解放，为实现中华民族伟大复兴创造根本社会条件。", opts: ["帝国主义", "封建主义", "无政府主义", "官僚资本主义", "共产主义"], ans: "ABD"},
+        {id: "U11", type: "单选", q: "1915年9月，陈独秀在上海创办（ ），新文化运动由此发端。", opts: ["《先驱》", "《青年杂志》", "《向导》", "《晨报》"], ans: "B"},
+        {id: "U12", type: "单选", q: "新文化运动以（ ）为救国方案。", opts: ["资产阶级民粹主义", "马克思列宁主义", "资产阶级民主主义", "鲍尔希维主义"], ans: "C"},
+        {id: "U13", type: "单选", q: "五四运动后，李大钊发表的（ ）系统介绍了马克思主义理论，标志着马克思主义在中国进入比较系统的传播阶段。", opts: ["《法俄革命之比较观》", "《庶民的胜利》", "《Bolshevism的胜利》", "《我的马克思主义观》"], ans: "D"},
+        {id: "U14", type: "多选", q: "关于马克思主义在中国的传播，下列说法中正确的是（ ）。", opts: ["陈独秀是中国最早的马克思主义传播者", "李大钊发表的《法俄革命之比较观》系统介绍了马克思主义理论", "俄国十月革命推动先进的中国人倾向于社会主义", "五四运动促进了马克思主义在中国的广泛传播", "毛泽东到1920年夏天已成为一个马克思主义者"], ans: "CDE"},
+        {id: "U15", type: "多选", q: "中国工人阶级是近代中国新生的伟大的革命阶级，具有（ ）等优点。", opts: ["与最先进的经济形式相联系", "富有组织性纪律性", "没有私人占有的生产资料", "坚决而彻底的革命性", "丰富的斗争经验"], ans: "ABCD"},
+        {id: "U16", type: "多选", q: "五四运动突破了知识分子的狭小范围，成为有（ ）参加的全国规模的群众运动。", opts: ["工人阶级", "小资产阶级", "农民阶级", "地主阶级", "资产阶级"], ans: "ABE"},
+        {id: "U17", type: "单选", q: "五四运动为中国共产党的成立（ ）。", opts: ["创造了社会阶级基础", "提供了先进理论的指导", "做了思想上干部上的准备", "积累了正反两方面的经验"], ans: "C"},
+        {id: "U18", type: "单选", q: "中国最早的学习和研究马克思主义的团体是（ ）。", opts: ["北京的马克思学说研究会", "上海的中国共产党发起组", "广州的广东共产党", "长沙的共产主义小组"], ans: "A"},
+        {id: "U19", type: "单选", q: "1920年4月，俄共（布）代表（ ）等来华。他们在北京、上海会见李大钊、陈独秀，讨论建立共产党的问题。", opts: ["鲍罗廷", "维经斯基", "季山嘉", "马林"], ans: "B"},
+        {id: "U20", type: "单选", q: "中国共产党早期组织，是在（ ）首先建立的。", opts: ["北京", "上海", "武汉", "广州"], ans: "B"},
+        {id: "U21", type: "多选", q: "1920年秋，（ ）等在武汉成立了共产党早期组织。", opts: ["董必武", "何叔衡", "陈潭秋", "谭平山", "包惠僧"], ans: "ACE"},
+        {id: "U22", type: "多选", q: "各地共产党早期组织成立后，开展了大量的工作。主要有（ ）。", opts: ["研究和宣传马克思主义", "同反马克思主义思潮展开论战", "在工人中进行宣传和组织工作", "成立社会主义青年团组织"], ans: "ABCD"},
+        {id: "U23", type: "单选", q: "1920年8月，陈望道翻译的（ ）中文全译本出版，成为马克思主义在中国传播史上的一件大事", opts: ["《资本论》", "《共产党宣言》", "《反杜林论》", "《1844年经济学哲学手稿》"], ans: "B"},
+        {id: "U24", type: "多选", q: "出席中国共产党第一次全国代表大会的共产国际代表有（ ）。", opts: ["马林", "维经斯基", "米夫", "尼克尔斯基"], ans: "AD"},
+        {id: "U25", type: "单选", q: "据后来考证，党的一大开幕的准确日期是（ ）。", opts: ["1921年7月1日", "1921年7月21日", "1921年7月23日", "1921年7月30日"], ans: "C"},
+        {id: "U26", type: "多选", q: "下列说法中，正确的是（ ）。", opts: ["党的一大通过了中国共产党成立后的第一个党章", "党的一大选举产生了以陈独秀为书记的中央局", "中国共产党的成立是近代中国历史发展的必然产物", "中国共产党代表着整个中国人民和中华民族的利益", "党的一大提出联合第二国际"], ans: "BCD"},
+        {id: "U27", type: "单选", q: "近代以后中国人民反帝反封建的斗争之所以屡遭挫折和失败，最重要的原因就是（ ）。", opts: ["帝国主义和封建主义势力空前强大", "革命力量没有找到可靠的同盟军", "革命队伍内部不团结", "没有先进的坚强的政党作为凝聚力量的领导核心"], ans: "D"},
+        {id: "U28", type: "多选", q: "关于党的二大，下列叙述中正确的是（ ）。", opts: ["这次大会于1922年7月在上海举行", "会议提出了党的最高纲领和最低纲领", "会议选出了中共中央政治局", "会议提出联合资产阶级民主派", "会议确认中国共产党是共产国际的一个支部"], ans: "ABDE"},
+        {id: "U29", type: "单选", q: "党成立后致力于组织领导工人运动，1921年8月成立公开做职工运动的总机关——中国劳动组合书记部。书记部出版( ),举办工人学校，组织产业工会，开展罢工斗争。", opts: ["《劳动周刊》", "《劳动音》", "《劳动界》", "《劳动者》"], ans: "A"},
+        {id: "U30", type: "多选", q: "中国工人运动第一次高潮期间，全国发生大小罢工100余次，参加人数在30万以上。其中，（ ）最具代表性。", opts: ["京汉铁路工人罢工", "香港海员罢工", "安源路矿工人大罢工", "开滦煤矿工人大罢工", "省港大罢工"], ans: "CD"},
+        {id: "U31", type: "单选", q: "1922年7月，（ ）在广东海丰县成立第一个秘密农会。", opts: ["苏兆征", "彭湃", "王荷波", "项英"], ans: "B"},
+        {id: "U32", type: "多选", q: "关于中国共产党第三次全国代表大会，下列叙述中正确的是（ ）。", opts: ["这次大会在上海举行", "决定共产党员以个人身份加入国民党", "第一次修订党的章程", "首次规定新党员有候补期", "首次规定党员可以自愿退党"], ans: "BCDE"},
+        {id: "U33", type: "多选", q: "国民党一大以后，在国民党中央党部担任重要职务的共产党员有（ ）等。", opts: ["谭平山", "周恩来", "林伯渠", "毛泽东", "董必武"], ans: "ACD"},
+        {id: "U34", type: "多选", q: "国共合作实现后，很快开创了革命新局面，例如（ ）。", opts: ["中华全国总工会成立", "在广州开办六届农民运动讲习所", "创建黄埔军校", "国民革命思想广泛传播", "学生运动和妇女运动也得到发展"], ans: "ABCDE"},
+        {id: "U35", type: "多选", q: "1925年1月，中国共产党第四次全国代表大会在上海举行，这次大会的历史功绩在于（ ）。", opts: ["提出了无产阶级在民主革命中的领导权问题", "提出了工农联盟问题", "对民主革命的内容作了更加完整的规定", "强调了武装斗争的极端重要性", "确认中国共产党是共产国际的一个支部"], ans: "ABC"},
+        {id: "U36", type: "单选", q: "1927年初，毛泽东在（ ）中，尖锐批评党内外责难农民运动的种种谬论。", opts: ["《湖南农民运动考察报告》", "《中国社会各阶级的分析》", "《井冈山的斗争》", "《星星之火，可以燎原》"], ans: "A"},
+        {id: "U37", type: "单选", q: "1927年3月，蒋介石指使国民党军队逮捕了赣州总工会委员长、江西省总工会副委员长、共产党员（ ），逼迫他签字解散总工会。", opts: ["陈赞贤", "陈延年", "李子洲", "汪寿华"], ans: "A"},
+        {id: "U38", type: "多选", q: "关于党的五大及大会后的情况，下列叙述中正确的有（ ）。", opts: ["选举产生了党的历史上第一个中央纪律检查监督机构——中央监察委员会", "提出了如何领导农民进行土地革命的具体措施", "选举产生了中央政治局和中央政治局常务委员会", "首次把民主集中制明确写入党章", "首次明确入党年龄须在18岁以上"], ans: "ACDE"},
+        {id: "U39", type: "多选", q: "下列叙述中，正确有的（ ）。", opts: ["从1927年3月到1928年上半年，被杀害的共产党员和革命群众达31万多人", "李大钊发出了“砍头不要紧，只要主义真”的铮铮誓言", "大革命是一场以工农群众为主体的人民革命运动", "大革命基本推翻了北洋军阀的反动统治", "大革命为后来党领导的土地革命战争奠定了群众基础"], ans: "ACE"},
+        {id: "U40", type: "多选", q: "大革命的失败，从客观方面讲，是由于（ ）。", opts: ["反革命力量强大", "帝国主义的武装干涉", "中国共产党处于幼年时期", "资产阶级发生严重动摇", "蒋介石集团、汪精卫集团先后叛变革命"], ans: "ADE"},
+        {id: "U41", type: "多选", q: "大革命从兴起到失败的经验教训表明，党不但要建立革命的统一战线，而且要（ ）。", opts: ["始终保持自身的独立性", "一切经过统一战线", "实行“又团结又斗争”的方针", "争取无产阶级在革命中的领导权", "坚持利用并打出国民党左派的旗帜"], ans: "ACD"},
+        {id: "U42", type: "单选", q: "广州起义的实践再一次证明：面对国民党新军阀在中心城市拥有强大武装的形势，想通过（ ）或攻占大城市来夺取革命胜利是不可能的。", opts: ["城市武装起义", "农村革命根据地", "土地革命", "苏维埃运动"], ans: "A"},
+        {id: "U43", type: "多选", q: "毛泽东选择在井冈山建立革命根据地，原因在于（ ）。", opts: ["井冈山地区的群众基础比较好", "这里有愿意同工农革命军联合的旧式农民武装", "这里地势险要、易守难攻", "这个地区的经济便于部队筹款筹粮", "国民党对这个地区的控制力量比较薄弱"], ans: "ABCDE"},
+        {id: "U44", type: "多选", q: "井冈山时期留下的最为宝贵的财富，就是井冈山精神，最重要的方面就是（ ）。", opts: ["坚定信念、艰苦奋斗", "实事求是、敢闯新路", "依靠群众、勇于胜利", "自力更生、奋发图强", "开天辟地、敢为人先"], ans: "ABC"},
+        {id: "U45", type: "多选", q: "1929年12月，红四军党的第九次代表大会在福建古田召开。下列叙述中，正确的是（ ）。", opts: ["会议选举产生了新的中共红四军前敌委员会，毛泽东当选为书记", "会议决议是中国共产党和红军建设的纲领性文献", "会议确立了思想建党、政治建军的原则", "会议确立了军队政治工作的方针、原则、制度", "会议奠基的军队政治工作对红军生存发展起到了决定性作用"], ans: "ABCDE"},
+        {id: "U46", type: "单选", q: "毛泽东在（ ）一文中指出，红军、游击队和红色区域的建立和发展，是促进全国革命高潮的最重要因素。", opts: ["《中国的红色政权为什么能够存在》", "《星星之火，可以燎原》", "《反对本本主义》", "《中国革命战争的战略问题》"], ans: "B"},
+        {id: "U47", type: "多选", q: "党的历史上曾经先后发生的严重“左”倾错误是（ ）。", opts: ["“左”倾逃跑主义错误", "“左”倾盲动错误", "“左”倾机会主义错误", "李立三“左”倾冒险错误", "王明“左”倾教条主义错误"], ans: "BDE"},
+        {id: "U48", type: "多选", q: "根据罗米那兹“一次革命”的理论，（ ）都被当做了革命对象。", opts: ["工人阶级", "农民阶级", "民族资产阶级", "小资产阶级", "城市贫民"], ans: "CD"},
+        {id: "U49", type: "多选", q: "1928年6月至7月，中国共产党第六次全国代表大会在莫斯科近郊举行，这次大会（ ）。", opts: ["指出中国革命现阶段的性质是资产阶级民主革命", "指出党的总路线是争取群众", "把“左”倾作为主要危险来反对", "在党员管理制度和党的组织机构等方面作出了新的规定", "在党章中详细规定了民主集中制的内容"], ans: "ABCDE"},
+        {id: "U50", type: "多选", q: "党的六大的路线是基本正确的，但也存在缺点，其缺点在于（ ）。", opts: ["认为民族资产阶级是中国革命的“最危险的敌人之一”", "提出党的总路线是争取群众", "把党的工作重心放在城市", "认为革命高潮很快就会到来", "强调党员成分无产阶级化和指导机关工人化"], ans: "ACDE"},
+        // --- 下册 (练习题 下) ---
+        {id: "L1", type: "单选", q: "王明“左”倾教条主义的政治纲领主要体现在（ ）中。", opts: ["《中国现状与党的任务决议案》", "《两条路线》", "《新的革命高潮与一省或几省首先胜利》", "《关于立三路线问题的信》"], ans: "B"},
+        {id: "L2", type: "多选", q: "1931年4月和6月，（ ）的叛变给中共中央机关和中央领导人的安全造成极大威胁。", opts: ["顾顺章", "刘厚总", "张国焘", "向忠发", "蔡孝乾"], ans: "AD"},
+        {id: "L3", type: "多选", q: "在第四次反“围剿”失利后，红四方面军和红二军团分别开辟了（ ）根据地和（ ）根据地。", opts: ["鄂豫陕", "洪湖", "川陕", "黔北", "湘鄂川黔"], ans: "CE"},
+        {id: "L4", type: "多选", q: "遵义会议是党的历史上一个生死攸关的转折点，这次会议（ ）。", opts: ["事实上确立了毛泽东同志在党中央和红军的领导地位", "开始确立以毛泽东同志为主要代表的马克思主义正确路线在党中央的领导地位", "开始形成以毛泽东同志为核心的党的第一代中央领导集体", "开启了党独立自主解决中国革命实际问题的新阶段", "挽救了党、挽救了红军、挽救了中国革命"], ans: "ABCDE"},
+        {id: "L5", type: "单选", q: "1935年8月1日，中共驻共产国际代表团以中华苏维埃共和国临时中央政府和中共中央的名义，起草了通常被称为“八一宣言”的( ),不久公开发表。", opts: ["《为抗日救国告全国同胞书》", "《中央关于目前政治形势与党的任务决议》", "《论反对日本帝国主义的策略》", "《中共中央为公布国共合作宣言》"], ans: "A"},
+        {id: "L6", type: "多选", q: "1935年12月，中共中央政治局在陕北瓦窑堡召开扩大会议，这次会议（ ）。", opts: ["决定红军改为八路军", "提出党的基本策略任务是建立广泛的抗日民族统一战线", "表明党已经克服“左”倾冒险主义和关门主义", "确定了用和平方式解决西安事变的方针", "表明党开始努力解决政治路线问题"], ans: "BCE"},
+        {id: "L7", type: "单选", q: "1935年底，中共中央派（ ）到华北重建和加强遭受严重破坏的华北各地党组织。", opts: ["刘少奇", "陈云", "习仲勋", "杨尚昆"], ans: "A"},
+        {id: "L8", type: "多选", q: "1937年夏，毛泽东在( )中，从马克思主义认识论、辩证法的高度，着重揭露和批判了长期存在于党内的主观主义错误。", opts: ["《改造我们的学习》", "《实践论》", "《战争和战略问题》", "《矛盾论》", "《反对党八股》"], ans: "BD"},
+        {id: "L9", type: "单选", q: "1937年8月下旬，中共中央在陕北洛川召开政治局扩大会议，会议通过的抗日救国十大纲领，是党的( )的具体体现，阐明了党在抗战时期的基本政治主张。", opts: ["持久战的战略总方针", "敌后游击战争战术", "全面抗战路线", "逼蒋抗日政策"], ans: "C"},
+        {id: "L10", type: "单选", q: "坚持统一战线中的独立自主原则，实质上就是力争( )。这是把抗战引向胜利的中心一环。", opts: ["敌后游击战争的充分发展", "中国共产党对抗日战争的领导权", "八路军、新四军的发展壮大", "中共中央独立解决中国革命问题"], ans: "B"},
+        {id: "L11", type: "多选", q: "1937年11月底，中共驻共产国际代表、共产国际执委王明从苏联回到延安，主张( )的错误观点。", opts: ["一切经过统一战线", "一切服从统一战线", "坚持独立自主", "全党服从中央", "以斗争求团结"], ans: "AB"},
+        {id: "L12", type: "多选", q: "1938年9月至11月，党在延安召开扩大的六届六中全会，这次会议( )。", opts: ["确定了党在抗日战争战略相持阶段的基本方针和任务", "基本上纠正了王明的右倾错误", "进一步确立了毛泽东在全党的领导地位", "重申必须独立自主地领导人民进行抗战", "进一步统一了全党的思想和步调"], ans: "ABCDE"},
+        {id: "L13", type: "多选", q: "1939年，中国团结抗战的局面出现严重危机。针对国内时局的逆转趋势，中国共产党鲜明地提出（ ）的口号。", opts: ["坚持抗战到底反对中途妥协", "坚持独立自主反对妥协退让", "巩固国内团结反对内部分裂", "力求全国进步反对向后倒退", "支持团结御侮反对消极抗战"], ans: "ACD"},
+        {id: "L14", type: "多选", q: "在沦陷区城市和交通要道，党的地下组织实行（ ）的方针，彻底转变工作方式。", opts: ["严守纪律", "隐蔽精干", "长期埋伏", "积蓄力量", "以待时机"], ans: "BCDE"},
+        {id: "L15", type: "单选", q: "1939年1月，中共中央( )在重庆成立，此后在统一战线、党的建设、宣传文化、群众工作等方面进行了艰苦而卓有成效的工作。", opts: ["长江局", "南方局", "东南局", "西南局"], ans: "B"},
+        {id: "L16", type: "单选", q: "1939年冬至1940 年春，国民党顽固派掀起第一次反共高潮。中国共产党给予坚决回击，并在总结反摩擦斗争的基础上，制定了（ ）的原则。", opts: ["发展进步势力，争取中间势力，孤立顽固势力", "人不犯我，我不犯人，人若犯我，我必犯人", "有理、有利、有节", "针锋相对，寸土必争"], ans: "C"},
+        {id: "L17", type: "多选", q: "毛泽东系统总结中国革命的独创性经验，于1939年底1940年初先后发表( )等著作，完整地阐述了新民主主义理论。", opts: ["《论持久战》", "《<共产党人>发刊词》", "《中国革命和中国共产党》", "《新民主主义论》", "《论新阶段》"], ans: "BCD"},
+        {id: "L18", type: "多选", q: "关于毛泽东阐述的新民主主义理论，下列选项中正确的是（ ）。", opts: ["半殖民地半封建社会的性质，决定了中国革命必须分两步走", "中国民主革命在五四运动以后是资产阶级领导的民主革命", "区别新旧民主主义革命性质的根本标志是无产阶级领导权问题", "在经济上允许民族资本主义经济的发展和富农经济的存在", "这是毛泽东思想在抗战时期最重大的理论成果"], ans: "ACDE"},
+        {id: "L19", type: "多选", q: "中国共产党在中国革命中战胜敌人的主要法宝是（ ）。", opts: ["统一战线", "武装斗争", "党的建设", "民主监督", "自我革命"], ans: "ABC"},
+        {id: "L20", type: "单选", q: "从1939年冬起，各根据地相继实行减租减息，一般将原租额减少( ),规定年利息率一般为10%,其他杂租、劳役和各种形式的高利贷一律取缔。", opts: ["10%", "25%", "30%", "50%"], ans: "B"},
+        {id: "L21", type: "多选", q: "1942年2月，整风运动在全党普遍展开，内容是（ ）。", opts: ["反对主观主义", "反对宗派主义", "反对党八股", "反对机会主义", "反对教条主义"], ans: "ABC"},
+        {id: "L22", type: "多选", q: "延安整风运动的起因主要有（ ）。", opts: ["共产国际要求王明不要再去竞争中共领导人", "党内对王明“左”倾教条主义的认识有分歧", "王明的右倾错误一度引起党内思想混乱，甚至出现了宗派主义问题", "毛泽东关于党内路线斗争的思想已经发展成熟", "抗战初期党员数量的迅猛增加造成思想不一致,必须加强党的自身建设"], ans: "BCE"},
+        {id: "L23", type: "单选", q: "延安整风运动贯彻（ ）的方针。", opts: ["镇压与宽大相结合", "百花齐放、百家争鸣", "惩前毖后，治病救人", "一个不杀、大部不抓"], ans: "C"},
+        {id: "L24", type: "单选", q: "关于共产国际对中国革命和中国共产党的影响，毛泽东的评价是（ ）。", opts: ["一无是处", "两头差、中间好", "两头好、中间差", "箭和靶的关系"], ans: "C"},
+        {id: "L25", type: "单选", q: "1944年9月，中共代表林伯渠在国民参政会上正式提出废除一党专政、( )的主张。这个主张在国内外引起强烈反响，获得各民主党派、广大民主人士的赞同和拥护，成为全国人民奋斗的政治目标。", opts: ["实现国共轮流执政", "组织国民代表大会", "建立民主联合政府", "召开政治协商会议"], ans: "C"},
+        {id: "L26", type: "多选", q: "关于党的七大，下列叙述中正确的有（ ）。", opts: ["毛泽东在会上作《论统一战线》的讲话", "大会拟定了建立联合政府的具体步骤", "大会提出了实现中国工业化的宏伟任务", "大会标志着整风运动胜利结束", "大会宣布要让有利于国计民生的私人资本主义有一定程度的发展"], ans: "BCE"},
+        {id: "L27", type: "多选", q: "党的七大把党在长期奋斗中形成的优良作风概括为（ ）。", opts: ["理论和实践相结合", "和人民群众紧密联系在一起", "自我批评", "艰苦朴素"], ans: "ABC"},
+        {id: "L28", type: "单选", q: "把毛泽东思想确立为党的指导思想并写入党章，是（ ）的历史性贡献。", opts: ["党的五大", "党的六大", "党的七大", "党的八大"], ans: "C"},
+        {id: "L29", type: "多选", q: "党的七大选举产生了新的中央委员会，七届一中全会选举（ ）为中央书记处书记。", opts: ["毛泽东", "朱德", "刘少奇", "周恩来", "任弼时"], ans: "ABCDE"},
+        {id: "L30", type: "单选", q: "1946年5月4日，中共中央发出改变解放区土地政策的指示，将抗战以来的“减租减息”政策改为“( )”政策。", opts: ["没收一切土地", "耕者有其田", "联合中农、限制富农", "消灭地主阶级"], ans: "B"},
+        {id: "L31", type: "单选", q: "1939年12月，毛泽东在《中国革命和中国共产党》中指出，民族资产阶级是( )同盟军。", opts: ["坚固的", "可靠的", "在一定时期中和一定程度上的", "强大的"], ans: "C"},
+        {id: "L32", type: "单选", q: "解放战争时期，中国共产党对民族资产阶级的认识是（ ）。", opts: ["一切联合，否认斗争", "一切斗争，否认联合", "在一定时期中和一定程度上的同盟军", "是人民大众的一部分"], ans: "D"},
+        {id: "L33", type: "单选", q: "1947年7月至9月，中共中央工作委员会在西柏坡召开全国土地会议，制定了（ ）。", opts: ["《中国土地法大纲》", "《土地改革法》", "《关于发展农业生产合作社的决定》", "《关于抗日根据地土地政策的决定》"], ans: "A"},
+        {id: "L34", type: "多选", q: "1949年3月在西柏坡召开的党的七届二中全会指出了中国（ ）的发展方向。", opts: ["由近代化国家转变为发展中国家", "由农业国转变为工业国", "由新民主主义社会转变为社会主义社会", "由半殖民地半封建社会转变为社会主义社会"], ans: "BC"},
+        {id: "L35", type: "单选", q: "新中国成立初期，全国大陆最后一个待解放地区是（ ）。", opts: ["新疆", "海南岛", "台湾", "西藏"], ans: "D"},
+        {id: "L36", type: "多选", q: "1949年上半年，毛泽东提出的基本外交方针是（ ）。", opts: ["和平共处", "另起炉灶", "打扫干净屋子再请客", "一边倒", "互不侵犯"], ans: "BCD"},
+        {id: "L37", type: "多选", q: "1950年6月，中国共产党在北京召开七届三中全会。毛泽东在书面报告中指出，要用三年时间，创造三个条件，即（ ）。", opts: ["土地改革的完成", "现有工商业的合理调整", "国家机构所需经费的大量节俭", "取得抗美援朝战争的胜利", "完成社会主义改造"], ans: "ABC"},
+        {id: "L38", type: "单选", q: "由于革命胜利引起社会经济改组，农民负担还很重，一部分工商资产阶级也惶惶不可终日。针对这个情况，毛泽东在党的七届三中全会上提出了( )的方针。", opts: ["公私兼顾、劳资两利", "边打、边稳、边建", "不要四面出击", "利用、限制、改造"], ans: "C"},
+        {id: "L39", type: "多选", q: "1951年12月，党中央决定开展“三反”斗争，即（ ）。", opts: ["反对形式主义", "反对贪污", "反对浪费", "反对享乐主义", "反对官僚主义"], ans: "BCE"},
+        {id: "L40", type: "多选", q: "在领导中国人民全面建设社会主义时期，毛泽东提出了赶超战略，主要原因是( )。", opts: ["振兴中华的历史使命感的强烈驱使", "建设过程中产生小资产阶级狂热性", "社会主义阵营赶超浪潮的示范效应", "“一五”计划顺利实施激发了雄心壮志"], ans: "ACD"},
+        {id: "L41", type: "多选", q: "1964年12月，周恩来在三届全国人大一次会议上宣布了建设“四个现代化”的任务，即建设（ ）。", opts: ["现代农业", "现代文化", "现代工业", "现代国防", "现代科学技术"], ans: "ACDE"},
+        {id: "L42", type: "多选", q: "在社会主义中国实施赶超战略具有现实可能性，主要取决于（ ）。", opts: ["社会主义制度的优越性", "苏联的大规模经济援助", "中国共产党的正确领导", "国际共产主义运动日益高涨", "人民群众建设社会主义的积极性"], ans: "ACE"},
+        {id: "L43", type: "多选", q: "中国共产党作出实行改革开放的历史性决策，是基于（ ）。", opts: ["对党和国家前途命运的深刻把握", "对社会主义革命和建设实践的深刻总结", "对时代潮流的深刻洞察", "对人民群众期盼和需要的深刻体悟", "对社会主义建设失误的深刻反思"], ans: "ABCD"},
+        {id: "L44", type: "单选", q: "1981年6月，（ ）通过了《关于建国以来党的若干历史问题的决议》，标志着拨乱反正胜利完成。", opts: ["党的十一届三中全会", "党的十一届六中全会", "党的十三届四中全会", "党的十九届六中全会"], ans: "B"},
+        {id: "L45", type: "单选", q: "党的十九大把( )确立为党必须长期坚持的指导思想，写进党章，实现了党的指导思想的又一次与时俱进。", opts: ["邓小平理论", "“三个代表”重要思想", "科学发展观", "习近平新时代中国特色社会主义思想"], ans: "D"},
+        {id: "L46", type: "单选", q: "党的（ ）决定党的建设的方向和效果，是党的建设的“灵魂”和“根基”。", opts: ["思想建设", "政治建设", "组织建设", "纪律建设"], ans: "B"},
+        {id: "L47", type: "多选", q: "党的第三个历史决议概括的“十个坚持”历史经验，是系统完整、相互贯通的有机整体，揭示了( )。", opts: ["党实现中华民族伟大复兴中国梦的根本方向", "党和人民事业不断成功的根本保证", "党始终立于不败之地力量源泉", "党始终掌握历史主动的根本原因", "党永葆先进性和纯洁性、始终走在时代前列的根本途径"], ans: "BCDE"},
+        {id: "L48", type: "多选", q: "2025年10月20日至23日，党的二十届四中全会在北京召开。这次会议（ ）。", opts: ["高度评价“十四五”时期我国发展取得的重大成就", "指出实现社会主义现代化是一个阶梯式递进、不断发展进步的过程，需要不懈努力、接续奋斗", "提出了“十五五”时期经济社会发展主要目标", "强调治国必先治党，党兴才能国强", "强调坚决实现全年经济社会发展目标"], ans: "ABCDE"},
+        {id: "L49", type: "多选", q: "党的二十届四中全会指出，“十五五”时期经济社会发展必须遵循以下原则，坚持党的全面领导，坚持（ ），坚持（ ），坚持（ ），坚持有效市场和有为政府相结合，坚持（ ）。", opts: ["人民至上", "高质量发展", "全面深化改革", "统筹发展和安全", "贯彻新发展理念"], ans: "ABCD"},
+        {id: "L50", type: "多选", q: "党的二十届四中全会强调，坚持以党的自我革命引领社会革命，持之以恒推进全面从严治党，增强党的( ),提高党领导经济社会发展能力和水平，为推进中国式现代化凝聚磅礴力量。", opts: ["政治领导力", "内部凝聚力", "思想引领力", "群众组织力", "社会号召力"], ans: "ACDE"}
+    ];
+
+    // 运行时变量
+    let quizData = [];      // 包含随机化后的选项映射
+    let userState = [];     // 记录每题的状态: { selected: [], submitted: false }
+    let currentIdx = 0;
+
+    // 洗牌算法
+    function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    function startQuiz() {
+        // 1. 随机化题目顺序
+        let shuffledRaw = shuffle([...rawData]);
+        
+        // 2. 初始化每道题的选项顺序和状态
+        quizData = shuffledRaw.map(item => {
+            // 将选项转为对象，保留原始索引（A=0, B=1...）
+            let mappedOpts = item.opts.map((text, index) => ({
+                text: text,
+                origChar: String.fromCharCode(65 + index)
+            }));
+            // 随机打乱该题的选项
+            shuffle(mappedOpts);
+            return { ...item, displayOpts: mappedOpts };
+        });
+
+        userState = quizData.map(() => ({ selected: [], submitted: false }));
+        
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('quiz-screen').classList.remove('hidden');
+        renderQuestion();
+    }
+
+    function renderQuestion() {
+        const q = quizData[currentIdx];
+        const state = userState[currentIdx];
+        
+        // 更新头部
+        document.getElementById('q-number').innerText = `题目 ${currentIdx + 1} / ${quizData.length}`;
+        document.getElementById('current-score').innerText = `得分: ${calculateScore()}`;
+        document.getElementById('progress-inner').style.width = `${((currentIdx + 1) / quizData.length) * 100}%`;
+        
+        // 更新题目
+        document.getElementById('q-tag').innerText = q.type;
+        document.getElementById('q-title').innerText = q.q;
+        
+        // 渲染选项
+        const optContainer = document.getElementById('q-options');
+        optContainer.innerHTML = '';
+        
+        q.displayOpts.forEach((optObj, i) => {
+            const displayChar = String.fromCharCode(65 + i); // 当前显示的 A, B, C...
+            const div = document.createElement('div');
+            div.className = 'option';
+            if (state.submitted) div.classList.add('locked');
+            
+            // 恢复选中状态
+            if (state.selected.includes(optObj.origChar)) {
+                div.classList.add('selected');
+            }
+
+            // 如果已提交，显示对错颜色
+            if (state.submitted) {
+                const isCorrectOpt = q.ans.includes(optObj.origChar);
+                const isUserChosen = state.selected.includes(optObj.origChar);
+                if (isCorrectOpt) div.classList.add('correct');
+                if (isUserChosen && !isCorrectOpt) div.classList.add('wrong');
+            }
+
+            div.innerHTML = `<span style="margin-right:10px; font-weight:bold;">${displayChar}.</span> ${optObj.text}`;
+            div.onclick = () => selectOption(optObj.origChar, div);
+            optContainer.appendChild(div);
+        });
+
+        // 恢复反馈面板
+        const feedback = document.getElementById('feedback-box');
+        if (state.submitted) {
+            const isCorrect = state.selected.sort().join('') === q.ans.split('').sort().join('');
+            feedback.className = `feedback show ${isCorrect ? 'is-correct' : 'is-wrong'}`;
+            feedback.innerHTML = `<strong>${isCorrect ? '回答正确！' : '回答错误'}</strong><br>正确答案：${q.ans}`;
+            document.getElementById('submit-btn').innerText = (currentIdx === quizData.length - 1) ? '查看总分' : '下一题';
+        } else {
+            feedback.className = 'feedback';
+            document.getElementById('submit-btn').innerText = '提交答案';
+        }
+
+        // 控制“上一题”按钮
+        document.getElementById('prev-btn').disabled = (currentIdx === 0);
+    }
+
+    function selectOption(origChar, element) {
+        if (userState[currentIdx].submitted) return;
+        const q = quizData[currentIdx];
+        let selected = userState[currentIdx].selected;
+
+        if (q.type === '单选') {
+            userState[currentIdx].selected = [origChar];
+            Array.from(document.getElementsByClassName('option')).forEach(el => el.classList.remove('selected'));
+            element.classList.add('selected');
+        } else {
+            if (selected.includes(origChar)) {
+                userState[currentIdx].selected = selected.filter(c => c !== origChar);
+                element.classList.remove('selected');
+            } else {
+                userState[currentIdx].selected.push(origChar);
+                element.classList.add('selected');
+            }
+        }
+    }
+
+    function handleButtonClick() {
+        const state = userState[currentIdx];
+        if (!state.submitted) {
+            if (state.selected.length === 0) return alert('请选择答案');
+            state.submitted = true;
+            renderQuestion();
+        } else {
+            if (currentIdx < quizData.length - 1) {
+                currentIdx++;
+                renderQuestion();
+            } else {
+                showResult();
+            }
+        }
+    }
+
+    function prevQuestion() {
+        if (currentIdx > 0) {
+            currentIdx--;
+            renderQuestion();
+        }
+    }
+
+    function calculateScore() {
+        let s = 0;
+        userState.forEach((state, index) => {
+            if (state.submitted) {
+                const userAns = state.selected.sort().join('');
+                const correctAns = quizData[index].ans.split('').sort().join('');
+                if (userAns === correctAns) s++;
+            }
+        });
+        return s;
+    }
+
+    function showResult() {
+        document.getElementById('quiz-screen').classList.add('hidden');
+        document.getElementById('result-screen').classList.remove('hidden');
+        const finalScore = calculateScore();
+        document.getElementById('final-score').innerText = finalScore;
+        
+        let msg = "";
+        if(finalScore >= 90) msg = "卓越！您对党史知识了如指掌。";
+        else if(finalScore >= 70) msg = "优秀！继续保持学习劲头。";
+        else if(finalScore >= 60) msg = "及格。建议复习错题集。";
+        else msg = "还需要多多加油哦！";
+        document.getElementById('score-text').innerText = msg;
+    }
+</script>
+
+</body>
+</html>
