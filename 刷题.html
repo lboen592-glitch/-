@@ -312,21 +312,29 @@
         const q = quizData[currentIdx];
         const state = userState[currentIdx];
         
-        // 更新头部
+        // 1. 更新头部信息
         document.getElementById('q-number').innerText = `题目 ${currentIdx + 1} / ${quizData.length}`;
         document.getElementById('current-score').innerText = `得分: ${calculateScore()}`;
         document.getElementById('progress-inner').style.width = `${((currentIdx + 1) / quizData.length) * 100}%`;
         
-        // 更新题目
         document.getElementById('q-tag').innerText = q.type;
         document.getElementById('q-title').innerText = q.q;
         
-        // 渲染选项
+        // 2. 渲染选项并计算“当前显示”的正确答案字母
         const optContainer = document.getElementById('q-options');
         optContainer.innerHTML = '';
         
+        let currentDisplayCorrectLabels = []; // 用于存储当前屏幕显示的正确序号（如 A, B）
+
         q.displayOpts.forEach((optObj, i) => {
             const displayChar = String.fromCharCode(65 + i); // 当前显示的 A, B, C...
+            const isThisOptCorrect = q.ans.includes(optObj.origChar); // 判断这是否是正确选项
+            
+            // 如果这个选项是正确的，记录它当前显示的字母
+            if (isThisOptCorrect) {
+                currentDisplayCorrectLabels.push(displayChar);
+            }
+
             const div = document.createElement('div');
             div.className = 'option';
             if (state.submitted) div.classList.add('locked');
@@ -338,10 +346,9 @@
 
             // 如果已提交，显示对错颜色
             if (state.submitted) {
-                const isCorrectOpt = q.ans.includes(optObj.origChar);
                 const isUserChosen = state.selected.includes(optObj.origChar);
-                if (isCorrectOpt) div.classList.add('correct');
-                if (isUserChosen && !isCorrectOpt) div.classList.add('wrong');
+                if (isThisOptCorrect) div.classList.add('correct');
+                if (isUserChosen && !isThisOptCorrect) div.classList.add('wrong');
             }
 
             div.innerHTML = `<span style="margin-right:10px; font-weight:bold;">${displayChar}.</span> ${optObj.text}`;
@@ -349,19 +356,23 @@
             optContainer.appendChild(div);
         });
 
-        // 恢复反馈面板
+        // 3. 恢复反馈面板（修正答案显示逻辑）
         const feedback = document.getElementById('feedback-box');
         if (state.submitted) {
             const isCorrect = state.selected.sort().join('') === q.ans.split('').sort().join('');
+            
+            // 关键修复：这里显示 currentDisplayCorrectLabels，而不是 q.ans
+            const correctText = currentDisplayCorrectLabels.sort().join('、');
+            
             feedback.className = `feedback show ${isCorrect ? 'is-correct' : 'is-wrong'}`;
-            feedback.innerHTML = `<strong>${isCorrect ? '回答正确！' : '回答错误'}</strong><br>正确答案：${q.ans}`;
+            feedback.innerHTML = `<strong>${isCorrect ? '回答正确！' : '回答错误'}</strong><br>正确答案：${correctText}`;
+            
             document.getElementById('submit-btn').innerText = (currentIdx === quizData.length - 1) ? '查看总分' : '下一题';
         } else {
             feedback.className = 'feedback';
             document.getElementById('submit-btn').innerText = '提交答案';
         }
 
-        // 控制“上一题”按钮
         document.getElementById('prev-btn').disabled = (currentIdx === 0);
     }
 
