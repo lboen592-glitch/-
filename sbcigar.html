@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SBcigar</title>
+    <style>
+        :root {
+            --accent-color: #0071e3;
+            --glass-bg: rgba(255, 255, 255, 0.85);
+            --text-main: #1d1d1f;
+            --text-sub: #86868b;
+            --success: #28cd41;
+            --error: #ff3b30;
+            --apple-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+            --card-radius: 32px;
+        }
+
+        body, html {
+            margin: 0; padding: 0; height: 100%; width: 100%;
+            overflow: hidden; background: #000;
+            font-family: -apple-system, "SF Pro Display", "Helvetica Neue", sans-serif;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        /* 极致电影感动态流光背景 */
+        .bg-glow-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1; background: radial-gradient(circle at 50% 50%, #1d1d1f 0%, #000 100%);
+        }
+        .glow-blob {
+            position: absolute; width: 1000px; height: 1000px;
+            background: radial-gradient(circle, rgba(0, 113, 227, 0.15) 0%, transparent 70%);
+            filter: blur(120px); border-radius: 50%;
+            animation: drift 30s infinite alternate ease-in-out;
+        }
+        @keyframes drift {
+            0% { transform: translate(-20%, -20%) scale(1); }
+            100% { transform: translate(20%, 20%) scale(1.2); }
+        }
+
+        #app {
+            width: 100%; max-width: 520px; padding: 24px;
+            perspective: 1000px;
+        }
+
+        /* 核心卡片容器 */
+        .card-wrapper {
+            width: 100%;
+            transition: opacity 0.4s var(--apple-ease), transform 0.4s var(--apple-ease);
+            will-change: transform, opacity;
+        }
+
+        /* 进场动画 - 仅在切题时由脚本触发 */
+        .fade-in { opacity: 1; transform: scale(1); filter: blur(0); }
+        .fade-out { opacity: 0; transform: scale(0.95); filter: blur(10px); }
+
+        .card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(50px) saturate(200%);
+            -webkit-backdrop-filter: blur(50px) saturate(200%);
+            border-radius: var(--card-radius);
+            padding: 44px;
+            box-shadow: 0 40px 80px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.4);
+            color: var(--text-main);
+        }
+
+        /* Submit 正确反馈：原地轻微冲击 */
+        .impact-success { animation: impactSuccess 0.5s var(--apple-ease); }
+        @keyframes impactSuccess {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.03); box-shadow: 0 0 80px var(--success); }
+        }
+
+        /* Submit 错误反馈：原地细腻抖动 */
+        .shake-error { animation: shakeError 0.4s var(--apple-ease); }
+        @keyframes shakeError {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-12px); box-shadow: 0 0 60px var(--error); }
+            75% { transform: translateX(12px); }
+        }
+
+        /* 文字排版 */
+        h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.04em; margin-bottom: 8px; color: #000; }
+        .subtitle { color: var(--text-sub); font-size: 1.1rem; margin-bottom: 32px; }
+
+        .progress-bar { height: 4px; background: rgba(0,0,0,0.05); border-radius: 2px; margin-bottom: 32px; overflow: hidden; }
+        #progress-inner { height: 100%; background: var(--accent-color); width: 0%; transition: width 0.6s var(--apple-ease); }
+
+        /* 选项设计：解决遮盖文字问题 */
+        .options { display: grid; gap: 12px; }
+        .option {
+            padding: 20px 24px;
+            background: rgba(0,0,0,0.03);
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s var(--apple-ease);
+            font-size: 17px;
+            font-weight: 600;
+            border: 1.5px solid transparent;
+            display: flex;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+        }
+        .option:hover:not(.locked) { background: rgba(0,0,0,0.06); transform: translateY(-2px); }
+        
+        /* 选中状态：文字变白，背景变蓝 */
+        .option.selected {
+            background: var(--accent-color) !important;
+            color: #fff !important;
+            box-shadow: 0 10px 20px rgba(0, 113, 227, 0.3);
+        }
+        .option.correct { background: var(--success) !important; color: #fff !important; }
+        .option.wrong { background: var(--error) !important; color: #fff !important; }
+        .option.locked { cursor: default; }
+
+        /* 选项前的字母标识 */
+        .opt-prefix { opacity: 0.5; margin-right: 14px; font-weight: 800; font-size: 13px; transition: color 0.3s; }
+        .selected .opt-prefix, .correct .opt-prefix, .wrong .opt-prefix { opacity: 1; color: #fff; }
+
+        .btn-group { display: flex; gap: 14px; margin-top: 36px; }
+        .btn {
+            background: var(--text-main); color: #fff; border: none; padding: 18px 32px;
+            border-radius: 50px; font-size: 15px; font-weight: 700; cursor: pointer;
+            transition: all 0.3s var(--apple-ease); flex: 2;
+        }
+        .btn-secondary { background: rgba(0,0,0,0.05); color: var(--text-main); flex: 1; }
+        .btn:active { transform: scale(0.95); opacity: 0.8; }
+
+        #final-score {
+            font-size: 7rem; font-weight: 900; letter-spacing: -0.05em;
+            background: linear-gradient(180deg, var(--accent-color), #5ac8fa);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="bg-glow-container"><div class="glow-blob"></div></div>
+
+<div id="app">
+    <div class="card-wrapper" id="main-card-wrapper">
+        <div class="card">
+            <div id="start-screen">
+                <div style="font-size: 60px; margin-bottom: 20px;"></div>
+                <h1>SBcigar</h1>
+                <p class="subtitle">130 道题</p>
+                <button class="btn" onclick="startQuiz()">开始</button>
+            </div>
+
+            <div id="quiz-screen" class="hidden">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                    <span id="q-number" style="font-weight:800; font-size:12px; color:var(--accent-color); letter-spacing:1px;">QUEST 1</span>
+                    <span id="current-score" style="font-weight:800; font-size:12px; opacity:0.4;">0 PTS</span>
+                </div>
+                <div class="progress-bar"><div id="progress-inner"></div></div>
+                <div id="q-tag" style="font-size: 10px; font-weight:900; opacity:0.3; letter-spacing:1px;">单选</div>
+                <div id="q-title" style="margin-top:10px; font-size:1.35rem; font-weight:700; line-height:1.4;">加载中...</div>
+                <div id="q-options" class="options" style="margin-top:25px;"></div>
+                
+                <div id="feedback-box" style="margin-top:25px; padding:20px; border-radius:20px; display:none; font-weight:700; font-size:14px;"></div>
+
+                <div class="btn-group">
+                    <button id="prev-btn" class="btn btn-secondary" onclick="navigate(-1)">上一道</button>
+                    <button id="submit-btn" class="btn" onclick="handleSubmit()">提交</button>
+                </div>
+            </div>
+
+            <div id="result-screen" class="hidden">
+                <h1 style="text-align:center;">报告</h1>
+                <div style="text-align:center;" id="final-score">0</div>
+                <p id="score-text" style="text-align:center; color:var(--text-sub); font-size:1.2rem;"></p>
+                <button class="btn" onclick="location.reload()" style="width:100%; margin-top:30px;">重新开始</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 题库数据：严格按照您的 130 道题逻辑录入（此处缩略展示，逻辑完全保留）
+    const rawData = [
+        // --- 数据源第一部分 ---
+        {id: "S1_1", type: "单选", q: "市场营销活动的核心是:", opts: ["销售", "购买", "交易", "交换"], ans: "D"},
+        {id: "S1_5", type: "单选", q: "国内某家电企业，利用自己在商标、技术、市场、资金等方面的优势，通过兼并收购其它家电企业来壮大自己，该企业采用的一体化增长方式属于:", opts: ["水平一体化", "前向一体化", "后向一体化", "同心多元化"], ans: "A"},
+        {id: "S1_9", type: "多选", q: "企业的社会责任有:", opts: ["保护消费者权益", "保护员工权益", "保护社会的利益和发展", "保护社会自然环境"], ans: "ACD"},
+        {id: "S1_2", type: "单选", q: "某造纸企业在制定市场营销策略时，在考虑消费者需要和企业利润的同时，还兼顾到社会利益，该企业所奉行的营销观念属于", opts: ["推销观念", "市场营销观念", "生态营销观念", "社会市场营销观念"], ans: "D"},
+        {id: "S1_6", type: "多选", q: "市场营销信息系统是企业收集、处理并利用相关环境数据的工具。一般由四个子系统构成，它们是:", opts: ["内部报告系统", "市场营销情报系统", "市场营销调研系统", "市场营销分析系统", "市场营销网络系统"], ans: "ABCD"},
+        {id: "S1_10", type: "多选", q: "市场主导者为了维护自己的优势，保住自己的领先地位，通常可以采取的战略有:", opts: ["扩大市场需求总量", "保护市场占有率", "提高市场占有率", "跟随竞争者"], ans: "ABC"},
+        {id: "S1_K1", type: "单选", q: "市场营销观念与客户观念的最大不后点在于客户观念强调:", opts: ["满足每一个子市场的需要", "满足市场上某一个子市场的需要", "满足每一个客户的特殊需要", "满足市场上大多数客户的需要"], ans: "C"},
+        {id: "S1_7", type: "多选", q: "影响消费者购买行为的因素较多，下列属于社会因素的有:", opts: ["参照群体", "家庭B", "社会角色", "年龄"], ans: "ABC"},
+        {id: "S1_4", type: "单选", q: "某家用电器企业不仅生产经营家电类产品，还跨行业经营房地产、机械、农副产品等多种业务，这种战略是", opts: ["市场渗透战略", "市场开发战", "产品开发战略", "多元化经营战略"], ans: "D"},
+        {id: "S1_8", type: "多选", q: "绿色营销实施过程包括哪些步骤:", opts: ["树立绿色营销理念", "收集绿色需求信息", "制定绿色营销策略", "确定绿色营销组合"], ans: "ABCD"},
+
+        // --- 数据源重复/变体部分 (严格保留) ---
+        {id: "S2_1", type: "单选", q: "市场营销活动的核心是:", opts: ["销售", "购买", "交易", "交换"], ans: "D"},
+        {id: "S2_6", type: "单选", q: "国内某家电企业，利用自己在商标、技式属于:", opts: ["水平一体化", "前向一体化", "后向一体化", "同心多元化"], ans: "A"},
+        {id: "S2_9", type: "多选", q: "企业的社会责任有:", opts: ["保护消费者权益", "保护员工权益", "保护社会的利益和发展", "保护社会自然环境"], ans: "ACD"},
+        {id: "S2_2", type: "单选", q: "某造纸企业在制定市场营销策略时千冬志造费丧杰要和企花和润的品时，还兼顾到", opts: ["推销观念", "市场营销观念", "生态营销观念", "社会市场营销观念"], ans: "D"},
+        {id: "S2_6_M", type: "多选", q: "市场营销信息系统是企业收集、处理并利用相关环境数据的工具。一般由四个子系统沟成官们是", opts: ["内部报告系统", "市场营销情报系统", "市场营销调研系统", "市场营销分析系统", "市场营销网络系统"], ans: "ABCD"},
+        {id: "S2_10", type: "多选", q: "市场主导者为了维护自己的优势，保住自己的领先地位，通常可以采取的战略有:", opts: ["扩大市场需求总量", "保护市场占有率", "提高市场占有率", "跟随竞争者"], ans: "ABC"},
+        {id: "S2_K2", type: "单选", q: "市场营销观念与客户观念的最大不同", opts: ["满足每一个子市场的需要", "满足市场上某一个子市场的需要", "满足每一个客户的特殊需要", "满足市场上大多数客户的需要"], ans: "C"},
+        {id: "S2_7", type: "多选", q: "影响消费者购买行为的因素较多，下列屋于社会因素的有:", opts: ["参照群体", "家庭", "社会", "角色年龄"], ans: "ABC"},
+        {id: "S2_4", type: "单选", q: "某家用电器企业不仅生产经营家电类产品，还跨行业经营房地产、机械、农副产品等客釉业条这釉战略", opts: ["市场渗透战略", "市场开发战略", "产品开发战略", "多元化经营战略"], ans: "D"},
+        {id: "S2_8", type: "多选", q: "绿色营销实施过程包括哪些步骤:", opts: ["树立绿色营销理念", "收集绿色需求信息", "制定绿色营销策略", "确定绿色营销组合"], ans: "ABCD"},
+
+        // --- 数据源第三部分 (葡萄酒等) ---
+        {id: "S3_1", type: "单选", q: "某葡萄酒厂拟开发新市场,但调研结果表明该地的消费者不喜欢唱葡萄酒,此时该企业应采取的调节市场需求的策略是()", opts: ["维持营销策略", "改变营销策略", "降低营销策略", "刺激营销策略"], ans: "D"},
+        {id: "S3_5", type: "单选", q: "房地产公司和汽车制造公司之间互为()", opts: ["愿望竞争者", "平行竞争者", "品牌竞争者", "形式竞争者"], ans: "A"},
+        {id: "S3_9", type: "多选", q: "多因素投资组合短阵中的“红色地带”应采取的战略是()", opts: ["发展", "收割", "放弃", "增加投资"], ans: "BC"},
+        {id: "S3_2", type: "单选", q: "“酒香不怕巷子深\"所体现出的企业市场营销誓学是(", opts: ["生产观念", "市场营销观念", "销售观念", "产品观念"], ans: "D"},
+        {id: "S3_6", type: "多选", q: "供应链的主要特征有( )", opts: ["复杂性", "动态性", "交叉性", "面向用户需求"], ans: "ABCD"},
+        {id: "S3_10", type: "多选", q: "下列属于企业可控的因素是()", opts: ["产品", "政治", "价格", "促销"], ans: "ACD"},
+        {id: "S3_3", type: "单选", q: "菜游业务市场销售增长率大于10%,市场份额与最大竞争务属于(", opts: ["问号类", "金牛类", "明星类", "瘦狗类"], ans: "C"},
+        {id: "S3_7", type: "多选", q: "有效市场细分的条件是()", opts: ["可测是性", "可比较性", "可进入性", "可盈利性"], ans: "ACD"},
+        {id: "S3_4", type: "单选", q: "最南有灵活性,但是花费成本较高的调查方法是(", opts: ["电话访问", "邮寄问卷间", "人员访间", "试验法"], ans: "C"},
+        {id: "S3_8", type: "多选", q: "在确定了战鸡目标 and 进攻对象之后,市场挑战者可选择的进", opts: ["正面进攻", "侧面进攻", "包围进攻", "迁回进攻"], ans: "ABCD"},
+
+        // --- 数据源第四部分 ---
+        {id: "S4_1", type: "单选", q: "企业在制定营销政策时,要统筹兼顾二方面的利益,即企业利润、消费者需要的满足和社会利益,这种营销管理哲学是()", opts: ["推销观念", "社会市场营销观念", "生产观念", "市场营销"], ans: "B"},
+        {id: "S4_6", type: "多选", q: "通常供市场跟随者选择的跟随战略有()", opts: ["紧密跟随", "距离跟随", "选择跟随", "不跟随"], ans: "B"},
+        {id: "S4_K1", type: "单选", q: "旅游业，体育运动行业，图书出版业及文化娱乐业专业为争夺消费者在一年内的支出而相互竞争，他们彼此之间的关系", opts: ["愿望竞争者", "一般竞争者", "产品形式竞争者", "品牌竞争者"], ans: "A"},
+        {id: "S4_AD", type: "多选", q: "杂志是企业常用的平面广告媒体,与其它广告媒体相比,它的优点有、", opts: ["灵活", "针对性强", "保存期长", "触及面广"], ans: "BC"},
+        {id: "S4_6_2", type: "多选", q: "通常供市场跟随者选择的跟随战略有( )", opts: ["紧密跟随", "距离跟随", "选择跟随", "不跟随"], ans: "ABC"},
+        {id: "S4_10", type: "多选", q: "影响消费者购买行为的社会因素有()", opts: ["参照群体", "家庭", "社会角色", "生活方式"], ans: "ABC"},
+        {id: "S4_7", type: "单选", q: "密集增长策略有三种形式,在新市场上扩大现有产品销售的", opts: ["市场渗透", "市场开发", "产品开发", "多元化经营"], ans: "B"},
+        {id: "S4_8", type: "单选", q: "银行属于市场营销中介中的()", opts: ["供应商", "商人中间商", "代理中间离", "辅助商"], ans: "D"},
+        {id: "S4_9", type: "多选", q: "测定广告销售效果的主要指标,包括()", opts: ["广告费用占销率法", "广告费用增销率法", "单位费用促销法", "单位费用增销法"], ans: "ABCD"},
+        {id: "S4_10_2", type: "多选", q: "收集原始数据的主要方法包括( )", opts: ["观察法", "实验法", "年鉴查阅法", "调查法"], ans: "ABD"},
+
+        // --- 数据源第五部分 (定点超越) ---
+        {id: "S5_1", type: "多选", q: ".(多选)定点超越的类型包:", opts: ["产品定点超越", "个价格定点超越", "过程定点超越", "组织定点超越"], ans: "ACD"},
+        {id: "S5_5", type: "多选", q: "企业确定广告预算的方法包括()", opts: ["量力而行法", "销售百分比法", "竞争对等法", "目标任务法"], ans: "ABCD"},
+        {id: "S5_M1", type: "多选", q: "企业媒体计划人员选择报纸这种平面媒体作广告的原因是", opts: ["针对性强,保存期长", "灵活、及时、广泛、可信", "感染力强、触及面广", "选择性强"], ans: "B"},
+        {id: "S5_6", type: "单选", q: "为吸引消费者注意,体现出价格较便宜的感受,利民电脑公司对自己生产的笔记本电脑定价4999元,利民电脑公司这种心理定价策略属于()", opts: ["声望定价", "尾数定价", "整数定价", "招徕定价"], ans: "B"},
+        {id: "S5_M2", type: "多选", q: "马斯洛需求层次论的内容包括", opts: ["生理需要", "安全需要", "社会需要", "自尊需要"], ans: "ABCD"},
+        {id: "S5_7", type: "多选", q: "企业的社会责任包括(", opts: ["保护消费耆权益", "保护企业员工权益", "保护社会的利益", "发展保护自然环境"], ans: "ACD"},
+        {id: "S5_M3", type: "多选", q: "销售促进策略包括许多种有效的促销工具，其中折扣，赠品，特殊服务等促销工具针对的是", opts: ["消费者市场", "产业市场", "中间商", "推销人员"], ans: "B"},
+        {id: "S5_8", type: "单选", q: "“大家乐”连锁超市集团主营消费品,其中销售的产品由超市向生产厂家订购,然后再用“大家乐”品牌包装并将产品售出去,这种品牌使用者略是()", opts: ["分类品牌", "生产者品牌", "中间商品牌", "个别品牌"], ans: "C"},
+        {id: "S5_9", type: "多选", q: "关系营销的层次包括(", opts: ["基本型关系营销", "鼓动型关系营销", "负责型关系营销", "伙伴型关系营销"], ans: "ABCD"},
+        {id: "S5_10", type: "单选", q: "某酒类企业推出无醇啤酒,用来满足那些想唱啤酒但又想免受酒精困扰的消费者的需求,这种市场定位属于()", opts: ["顾客利益走位", "使用者走位", "产品特色走位", "使用场合定位"], ans: "C"},
+
+        // --- 数据源第六部分 (深海集团) ---
+        {id: "S6_1", type: "单选", q: "“深海”集团总裁曾说过:“企业必须在第一时间发现市场需求,并在第一时间满足 需求,这样企业才能在竞争中制胜”。这句话体现的市场营销哲学是()", opts: ["产品观念", "社会营销观念", "推销观念", "市场营销观念"], ans: "D"},
+        {id: "S6_H", type: "单选", q: "H公司是参照主要竞争对手G公司的广告支出费支出，确定本公司广告预算为1000万，这种确定广告预算的方法是", opts: ["量力而行法", "销售百分比法", "竞争对等法", "目标任务"], ans: "C"},
+        {id: "S6_ZK", type: "单选", q: "购买某产品1000件以下，单价10元:购买1000件以上,单价9，这种折扣属于", opts: ["现金折扣", "数量折扣", "功能折扣", "季节折扣"], ans: "B"},
+        {id: "S6_2", type: "多选", q: "垂直渠道系统的类型有()", opts: ["公司式", "管理式", "共生式", "合同式"], ans: "ABD"},
+        {id: "S6_6", type: "多选", q: "人员推销的特点有()", opts: ["具有较大灵活性", "有利于企业了解市场", "有利于发展人际关系", "针对性强"], ans: "ABCD"},
+        {id: "S6_10", type: "多选", q: "可供市场跟随者选择的跟随战略有()", opts: ["紧峦跟隨", "市场跟随", "距离跟随", "选择跟随"], ans: "ACD"},
+        {id: "S6_3", type: "单选", q: "广大消费者可以随时随地购买到饮料,饮料公司通常采用的分销策略是", opts: ["密集分销", "选择分销", "独家分销", "混合分销"], ans: "A"},
+        {id: "S6_7", type: "单选", q: "某新品牌洗衣粉采用“只选对的、不选贵的”广告语进行大规模高强度促销宣传，这种介绍期的营销策略是()", opts: ["快速撇脂策略", "快連渗透策略", "缓慢撇脂策略", "缓慢渗透策略"], ans: "B"},
+        {id: "S6_4", type: "多选", q: "影响订购点高低的因素有()", opts: ["订购前置时间", "使用率", "服务水平", "订购成本"], ans: "ABC"},
+        {id: "S6_8", type: "多选", q: "按消费者的购买习惯划分的产品类型有( )", opts: ["便利品", "选购品", "特殊品", "非渴求物品"], ans: "ABCD"},
+
+        // --- 数据源第七部分 (市场补缺者) ---
+        {id: "S7_1", type: "多选", q: "市场补缺者可采取的专业化战略有", opts: ["顾客规模专业化", "服务项日专业化", "分销渠道专业化", "特定顾客专业化"], ans: "ABCD"},
+        {id: "S7_BZ", type: "多选", q: "酒的包装非常有特色，许多消费者将改酒瓶的空瓶作为花瓶使用，以下不是该酒的包装策略是", opts: ["相似包装策略", "复用包装策略", "相关包装策略", "差异包装策略"], ans: "ACD"},
+        {id: "S7_9", type: "多选", q: "下列属于消费者市场细分变量的是( )", opts: ["地理細分", "人口细分", "行为细分", "最终用户"], ans: "ABC"},
+        {id: "S7_2", type: "多选", q: "企业里彻社会市场营销观念需要统筹兼顾的利益有()", opts: ["消费者需求", "上级指示", "企业利润", "社会利益"], ans: "ACD"},
+        {id: "S7_AD", type: "单选", q: "哪里有世界冠军,哪里就有A公司的产品”,这一广告词所利用的参照群体类型是", opts: ["向往群体", "次要群体", "首要群体", "厌恶群体"], ans: "A"},
+        {id: "S7_10", type: "单选", q: "通过观察正在进行的某一特定市场营销过程,来解决某一韦场营销调研问题,这种收集原始数据的方法称为(", opts: ["观察法", "实验法", "调查法", "专家评估法"], ans: "A"},
+        {id: "S7_3", type: "多选", q: "下列属于心理定价策略的有(", opts: ["尾数定价", "声望定价", "渗透定价", "招徕定价"], ans: "ABD"},
+        {id: "S7_DS", type: "单选", q: "面临威胁企业多种可能的对策,试图限制或扭转成不利发展因素的对策是", opts: ["避免", "反抗", "减轻", "转移"], ans: "C"},
+        {id: "S7_ZS", type: "单选", q: "单选,某中间商决定同时经营多家制造商生产的各种规格型号的同类产品，该配货决策是", opts: ["独家配货", "专深配货", "广泛配货", "杂乱配货"], ans: "B"},
+        {id: "S7_8", type: "单选", q: "如果企业的新业务面临高机会和高威胁,则该业务属于()", opts: ["理想业务", "成熟业务", "冒险业务", "困难业务"], ans: "C"},
+
+        // --- 数据源第八部分 (品牌含义) ---
+        {id: "S8_1", type: "多选", q: "品牌是一,个集合概念,它的整体涵义可分为6个层次,其中最持久的含义有", opts: ["属性", "价值", "利益", "文化"], ans: "BD"},
+        {id: "S8_5", type: "多选", q: "以下不属于产品整体概念中延伸产品层次的是()", opts: ["款式", "品牌", "安装", "送货"], ans: "AB"},
+        {id: "S8_9", type: "多选", q: "影响分销渠道设计的主要因素 include ( )", opts: ["顾客特性", "产品特性", "中间商特性", "竞争特性"], ans: "ABCD"},
+        {id: "S8_2", type: "多选", q: "根据购买者及其购买目的对市场进行划分,市场包括()", opts: ["消费者市场", "生产者市场", "政府市场", "中间商市场"], ans: "ABCD"},
+        {id: "S8_6", type: "多选", q: "考家企业盈利能力的指标有()", opts: ["销售利润率", "资产管理效率", "净资产收益率", "资产收益率"], ans: "ABCD"},
+        {id: "S8_JK", type: "单选", q: "健康与环保的的市场营销管理哲学是", opts: ["推销观念", "生产观念", "市场营销观念", "社会市场营销观念"], ans: "D"},
+        {id: "S8_CP", type: "单选", q: "上新产品前让顾客免费品尝，采用的促销方式是", opts: ["广告", "宣传", "人员推销", "销售促进"], ans: "D"},
+        {id: "S8_7", type: "单选", q: "灵活性强、及时、对当地市场的要盖率高、易被接受和信任,具有这些特点的广告媒体是()", opts: ["杂志", "报纸", "直接邮寄", "户外广告牌"], ans: "B"},
+        {id: "S8_4", type: "单选", q: "当企业拥有单一的产品大类,面对不同偏好的消费群体同时使用不同的分销渠道时,最适宜采用的市场营销组织类型是()", opts: ["市场型组织", "产品型组织", "职能型组织", "地理型组织"], ans: "A"},
+        {id: "S8_8", type: "单选", q: "某化妆品制造商将基产品销售给批发商,批发商再销售给超级市场,该化妆品制造商所采用渠道的阶数是()", opts: ["零阶", "一阶", "二阶", "三阶"], ans: "C"},
+
+        // --- 第一组题目 ---
+        {id: "G1_1", type: "多选", q: "影响订购点高低的主要因素有()", opts: ["订购前置时间", "使用率", "订购成本", "服务水平"], ans: "ABD"},
+        {id: "G1_2", type: "多选", q: "在定价方法中，不属于竞争导向定价法的有()", opts: ["成本加成定价法", "随行就市定价法", "目标利润定价法", "投标定价法"], ans: "AC"},
+        {id: "G1_3", type: "多选", q: "下列关于社会责任与企业利益二者之间关系的描述中，正确的有()", opts: ["承担社会责任就一定会损失企业利润", "承担社会责任能为企业带来长远利益", "承担社会责任能够间接地促进企业的声誉、形象以及销售", "承担社会责任能够使企业将短期利益同长远利益更好地结合起来"], ans: "BCD"},
+        {id: "G1_4", type: "多选", q: "市场营销效率控制的主要方式有()", opts: ["销售人员效率控制", "广告效率控制", "促销效率控制", "分销效率控制"], ans: "ABCD"},
+        {id: "G1_5", type: "多选", q: "为了指引全体工作人员都朝着既定的方向前进，企业要撰写正式的任务报告书，有效的任务报告书应具备的条件有()", opts: ["市场导向", "切实可行", "富鼓动性", "具体明确"], ans: "ABCD"},
+        {id: "G1_6", type: "单选", q: "经营同一品牌产品的不同超级市场、百货店与便利店之间的冲突属于()", opts: ["垂直渠道冲突", "水平渠道冲突", "多渠道冲突", "潜在冲突"], ans: "B"},
+        {id: "G1_7", type: "单选", q: "某企业主要生产精密数控机床，为了打开市场销路，最适宜采用的广告媒体是()", opts: ["电视", "报纸", "专业杂志", "户外广告牌"], ans: "D"},
+        {id: "G1_8", type: "单选", q: "某油漆生产企业为了生产经营的需要，收购了20家油漆经销商店，该增长战略属于()", opts: ["同心多元化", "水平多元化", "前向一体化", "后向一体化"], ans: "C"},
+        {id: "G1_9", type: "单选", q: "企业的某项产品相对市场占有率为4.2，市场增长率为21%，该战略业务单位是()", opts: ["问号类业务", "明星类业务", "金牛类业务", "瘦狗类业务"], ans: "B"},
+        {id: "G1_10", type: "单选", q: "“酒香不怕巷子深”体现的市场营销管理哲学是()", opts: ["生产观念", "社会营销观念", "推销观念", "产品观念"], ans: "D"},
+
+        // --- 第二组题目 ---
+        {id: "G2_1", type: "单选", q: "市场营销学产生于()", opts: ["十九世纪末", "二十世纪", "二战末期", "本世纪五十年代"], ans: "B"},
+        {id: "G2_2", type: "单选", q: "企业只推出单一产品，运用单一的市场营销组合，力求在一定程度上适合尽可能多的顾客的需求，这种战略是()", opts: ["无差异市场营销战略", "密集市场营销战略", "差异市场营销战略", "集中市场营销战略"], ans: "A"},
+        {id: "G2_3", type: "单选", q: "企业在调整业务投资组合时，对某些问号类业务单位，欲使其转入明星类单位，宜采取哪种战略()", opts: ["收割", "发展增大", "放弃", "保持"], ans: "B"},
+        {id: "G2_4", type: "单选", q: "机会水平和威胁水平均很高的企业业务属于()", opts: ["理想业务", "困难业务", "冒险业务", "成熟业务"], ans: "C"},
+        {id: "G2_5", type: "单选", q: "按马斯洛的需要层次论，最高层次的需要是()", opts: ["生理需要", "安全需要", "自我实现需要", "社会需要"], ans: "C"},
+        {id: "G2_6", type: "多选", q: "根据消费者购物习惯划分，消费品可分为以下几类()", opts: ["便利品", "选购品", "特殊品", "公用品"], ans: "ABC"},
+        {id: "G2_7", type: "多选", q: "企业在调整和优化产品组合时，依据情况不同，可选择以下策略()", opts: ["产品组合国际化", "缩减产品组合", "产品延伸", "扩大产品组合"], ans: "BCD"},
+        {id: "G2_8", type: "多选", q: "消费者所生疏的新产品的特性包括()", opts: ["适用性", "复杂性", "可试性", "相对优越性"], ans: "ABCD"},
+        {id: "G2_9", type: "多选", q: "企业定价导向大体上有以下几种()", opts: ["成本导向", "需求导向", "竞争导向", "效益导向"], ans: "ABC"},
+        {id: "G2_10", type: "多选", q: "垂直市场营销系统综合系统有以下几种()", opts: ["消费者合作社", "特许经营组织", "零售商合作社", "连锁店"], ans: "BC"},
+
+        // --- 第三组题目 ---
+        {id: "G3_1", type: "单选", q: "某企业在市场营销管理中缺乏远见，只看到自己的产品质量好，看不到市场需求在变化，该企业这种市场营销管理哲学是()", opts: ["产品观念", "社会营销观念", "推销观念", "生产观念"], ans: "A"},
+        {id: "G3_2", type: "单选", q: "打字机制造商把钢笔、铅笔、计算机等生产商看作竞争对手，打字机制造商识别公司竞争者的角度属于()", opts: ["产业竞争观念", "市场竞争观念", "品牌竞争观念", "行业竞争观念"], ans: "B"},
+        {id: "G3_3", type: "单选", q: "某服装公司把其女性消费者分为女童、青少年女孩、中老年妇女三种，这是市场细分中的()", opts: ["地理细分", "心理细分", "人口细分", "行为细分"], ans: "C"},
+        {id: "G3_4", type: "单选", q: "在产品介绍期，假设市场容量很大，市场对新产品的知晓度不高，消费者对价格敏感，潜在竞争激烈，企业随着生产规模的扩大可以降低单位生产成本的情况下，营销者应该采用的营销策略是()", opts: ["快速撇脂策略", "缓慢撇脂策略", "快速渗透策略", "缓慢渗透策略"], ans: "A"},
+        {id: "G3_5", type: "单选", q: "以企业的销售额占全行业销售额的百分比来表示的市场占有率是()", opts: ["全部市场占有率", "可达市场占有率", "相对市场占有率", "绝对市场占有率"], ans: "A"},
+        {id: "G3_6", type: "多选", q: "定点超越的基本类型包括()", opts: ["产品定点超越", "过程定点超越", "组织定点超越", "战略定点超越"], ans: "ABCD"},
+        {id: "G3_7", type: "多选", q: "年度计划控制是企业在本年度内采取控制步骤，检查实际绩效与计划之间是否有偏差。年度计划控制通常采用的方法包括()", opts: ["销售分析", "市场占有率分析", "市场营销费用对销售额比率分析", "财务分析"], ans: "ABCD"},
+        {id: "G3_8", type: "多选", q: "企业在确定促销组合或者为各种促销工具分配促销预算时，需要考虑的因素有()", opts: ["产品类型", "推拉式战略", "促销目标", "产品生命周期"], ans: "ABCD"},
+        {id: "G3_9", type: "多选", q: "产品整体概念体现了以顾客为中心的现代营销观念，主要包括()", opts: ["核心产品", "形式产品", "期望产品", "延伸产品"], ans: "ABCD"},
+        {id: "G3_10", type: "多选", q: "整合渠道系统是指渠道成员通过一体化整合而形成的分销渠道系统，整合渠道系统主要包括()", opts: ["垂直渠道系统", "交叉渠道系统", "水平渠道系统", "多渠道系统"], ans: "ACD"},
+
+        // --- 第四组题目 ---
+        {id: "G4_1", type: "单选", q: "企业运营过程中，广告媒体成本、产品说明书印刷费用、展销会费用都属于营销成本中的()", opts: ["直接推销费用", "促销费用", "储存费用", "物流费用"], ans: "B"},
+        {id: "G4_2", type: "单选", q: "企业无视食品安全，用被污染的面粉生产面包属于()", opts: ["价格策略不道德行为", "渠道策略不道德行为", "产品策略不道德行为", "广告策略不道德行为"], ans: "C"},
+        {id: "G4_3", type: "单选", q: "格力电器公司以捐赠计算机的方式积极参与“希望工程”建设，该企业社会责任属于()", opts: ["保护企业权益", "保护社会自然环境", "保护社会的利益和发展", "保护消费者权益"], ans: "C"},
+        {id: "G4_4", type: "单选", q: "整合营销从围绕4P制定营销组合转向()", opts: ["5P", "4C", "6P", "4R"], ans: "B"},
+        {id: "G4_5", type: "单选", q: "西联公司在营销中与顾客及其他利益方建立长期合作关系为核心理念，这种营销新概念是()", opts: ["绿色营销", "公共营销", "关系营销", "交际营销"], ans: "C"},
+        {id: "G4_6", type: "多选", q: "企业寻找、发现市场机会的方法有()", opts: ["分析产品/市场发展矩阵", "进行市场细分", "扩大现有市场", "收集市场信息"], ans: "ABD"},
+        {id: "G4_7", type: "多选", q: "市场营销中介包括()", opts: ["供应商", "批发商", "物流公司", "广告公司"], ans: "ABCD"},
+        {id: "G4_8", type: "多选", q: "以下属于消费者购买决策过程的是()", opts: ["引起需要", "收集信息", "增加收入", "评价方案"], ans: "ABD"},
+        {id: "G4_9", type: "多选", q: "市场主导者扩大市场需求量的方法有()", opts: ["开辟新用途", "发现新用户", "增加使用量", "缩减销售区域"], ans: "ABC"},
+        {id: "G4_10", type: "多选", q: "市场细分的有效性包括()", opts: ["可进入性", "可退出", "可盈利性", "可区分性"], ans: "ACD"},
+
+        // --- 第五组题目 ---
+        {id: "G5_1", type: "多选", q: "以下属于识别潜在顾客方法的是()", opts: ["朋友和熟人", "无穷的关系链", "上门推销", "讨论会"], ans: "ABCD"},
+        {id: "G5_2", type: "单选", q: "市场营销观念强调注重()", opts: ["卖方需求", "零售商需求", "消费者需求", "供应商需求"], ans: "C"},
+        {id: "G5_3", type: "单选", q: "特勤提出的“大市场营销”组合构成是()", opts: ["5P", "4P", "2P", "6P"], ans: "D"},
+        {id: "G5_4", type: "单选", q: "某蔬果公司原为一家有机蔬菜种植企业，后收购一家蔬菜零售连锁店进入销售领域，这种一体化增长方式属于()", opts: ["前向一体化", "同向一体化", "后向一体化", "水平一体化"], ans: "A"},
+        {id: "G5_5", type: "单选", q: "了解消费者对不同口味月饼的喜好，天香公司特意在街头对顾客进行随机访问，这种数据收集方法为()", opts: ["设计法", "观察法", "调查法", "专家评估法"], ans: "C"},
+        {id: "G5_6", type: "单选", q: "颐兰化妆品公司决定对其现有市场上销售的润肤霜进行升级换代，这种密集增长战略是()", opts: ["多元化发展", "产品开发", "市场渗透", "市场开发"], ans: "B"},
+        {id: "G5_7", type: "单选", q: "洗衣机制造商在顾客购买其生产的洗衣机后，主动与顾客联系，征求顾客的意见，这在关系营销中属于()", opts: ["基本型关系营销", "鼓动型关系营销", "伙伴型关系营销", "负责型关系营销"], ans: "D"},
+        {id: "G5_8", type: "多选", q: "影响仓库位置选择的主要因素有()", opts: ["运输时间", "运输距离", "运输量", "运输费用"], ans: "BCD"},
+        {id: "G5_9", type: "多选", q: "人员推销决策的内容大体上可分为以下几大类()", opts: ["战略决策", "控制决策", "目标决策", "管理决策"], ans: "AD"},
+        {id: "G5_10", type: "多选", q: "加工贸易是国际经济合作的有效方式，通常有以下几种重要形式()", opts: ["来样定制", "来料加工", "来件装配", "进料加工"], ans: "ABCD"}
+    ];
+
+    let quizData = [];
+    let userState = [];
+    let currentIdx = 0;
+    let isTransitioning = false;
+
+    function shuffle(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    function startQuiz() {
+        let shuffledRaw = shuffle([...rawData]);
+        quizData = shuffledRaw.map(item => {
+            let mappedOpts = item.opts.map((text, index) => ({
+                text: text, origChar: String.fromCharCode(65 + index)
+            }));
+            shuffle(mappedOpts);
+            return { ...item, displayOpts: mappedOpts };
+        });
+        userState = quizData.map(() => ({ selected: [], submitted: false }));
+        
+        const wrapper = document.getElementById('main-card-wrapper');
+        wrapper.classList.add('fade-out');
+        
+        setTimeout(() => {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('quiz-screen').classList.remove('hidden');
+            renderQuestion();
+            wrapper.classList.remove('fade-out');
+        }, 400);
+    }
+
+    function renderQuestion() {
+        const q = quizData[currentIdx];
+        const state = userState[currentIdx];
+        
+        document.getElementById('q-number').innerText = `QUEST ${currentIdx + 1} / ${quizData.length}`;
+        document.getElementById('current-score').innerText = `${calculateScore()} 分`;
+        document.getElementById('progress-inner').style.width = `${((currentIdx + 1) / quizData.length) * 100}%`;
+        document.getElementById('q-title').innerText = q.q;
+        document.getElementById('q-tag').innerText = q.type.includes('单选') ? '单选' : '多选';
+
+        const optContainer = document.getElementById('q-options');
+        optContainer.innerHTML = '';
+        
+        let correctLabels = [];
+        q.displayOpts.forEach((optObj, i) => {
+            const label = String.fromCharCode(65 + i);
+            if(q.ans.includes(optObj.origChar)) correctLabels.push(label);
+            
+            const div = document.createElement('div');
+            div.className = 'option';
+            if (state.submitted) {
+                div.classList.add('locked');
+                if (q.ans.includes(optObj.origChar)) div.classList.add('correct');
+                else if (state.selected.includes(optObj.origChar)) div.classList.add('wrong');
+            } else if (state.selected.includes(optObj.origChar)) {
+                div.classList.add('selected');
+            }
+
+            div.innerHTML = `<span class="opt-prefix">${label}</span> ${optObj.text}`;
+            div.onclick = () => selectOption(optObj.origChar, div);
+            optContainer.appendChild(div);
+        });
+
+        const feedback = document.getElementById('feedback-box');
+        const submitBtn = document.getElementById('submit-btn');
+        if (state.submitted) {
+            feedback.style.display = 'block';
+            const isCorrect = state.selected.sort().join('') === q.ans.split('').sort().join('');
+            feedback.style.background = isCorrect ? 'rgba(40, 205, 65, 0.1)' : 'rgba(255, 59, 48, 0.1)';
+            feedback.style.color = isCorrect ? 'var(--success)' : 'var(--error)';
+            feedback.innerHTML = `正确答案：${correctLabels.join('、')}`;
+            submitBtn.innerText = currentIdx === quizData.length - 1 ? '查看结果' : '下一道';
+        } else {
+            feedback.style.display = 'none';
+            submitBtn.innerText = '提交';
+        }
+        document.getElementById('prev-btn').style.visibility = currentIdx === 0 ? 'hidden' : 'visible';
+    }
+
+    function selectOption(char, el) {
+        if (userState[currentIdx].submitted) return;
+        const state = userState[currentIdx];
+        if (quizData[currentIdx].type.includes('单选')) {
+            state.selected = [char];
+            document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+            el.classList.add('selected');
+        } else {
+            if (state.selected.includes(char)) state.selected = state.selected.filter(c => c !== char);
+            else state.selected.push(char);
+            el.classList.toggle('selected');
+        }
+    }
+
+    function handleSubmit() {
+        const state = userState[currentIdx];
+        const card = document.querySelector('.card');
+        if (!state.submitted) {
+            if (state.selected.length === 0) return;
+            state.submitted = true;
+            const isCorrect = state.selected.sort().join('') === quizData[currentIdx].ans.split('').sort().join('');
+            
+            // 原地反馈，不触发全局弹出
+            card.classList.add(isCorrect ? 'impact-success' : 'shake-error');
+            setTimeout(() => card.classList.remove('impact-success', 'shake-error'), 600);
+            
+            renderQuestion();
+        } else {
+            navigate(1);
+        }
+    }
+
+    // 简单且流畅的淡入淡出过渡
+    function navigate(step) {
+        if (isTransitioning) return;
+        if (currentIdx + step < 0) return;
+        if (currentIdx + step >= quizData.length) return showResult();
+
+        isTransitioning = true;
+        const wrapper = document.getElementById('main-card-wrapper');
+        
+        wrapper.classList.add('fade-out');
+
+        setTimeout(() => {
+            currentIdx += step;
+            renderQuestion();
+            wrapper.classList.remove('fade-out');
+            setTimeout(() => { isTransitioning = false; }, 400);
+        }, 300);
+    }
+
+    function calculateScore() {
+        return userState.filter((s, i) => s.submitted && s.selected.sort().join('') === quizData[i].ans.split('').sort().join('')).length;
+    }
+
+    function showResult() {
+        const wrapper = document.getElementById('main-card-wrapper');
+        wrapper.classList.add('fade-out');
+        
+        setTimeout(() => {
+            document.getElementById('quiz-screen').classList.add('hidden');
+            document.getElementById('result-screen').classList.remove('hidden');
+            document.getElementById('final-score').innerText = calculateScore();
+            document.getElementById('score-text').innerText = "完成";
+            wrapper.classList.remove('fade-out');
+        }, 400);
+    }
+</script>
+
+</body>
+</html>
